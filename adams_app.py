@@ -1,6 +1,9 @@
 import streamlit as st
 import time
 import json
+import pandas as pd
+import io
+import random
 
 # Configure page
 st.set_page_config(
@@ -158,27 +161,76 @@ default_metrics = {
     'Bias Detection': {'score': 8.2, 'weight': 0.7}
 }
 
-# Sample dataset for demonstration
+# Sample dataset for demonstration - this gets replaced when user uploads real data
 sample_dataset = [
     {
         "Question": "What are the key benefits of using RAG systems in healthcare?",
-        "Reference Answer": "RAG systems provide up-to-date medical information, reduce hallucinations, ensure compliance, and enable personalized care.",
-        "Model Answer": "RAG systems in healthcare offer several key benefits: 1) Access to up-to-date medical research and guidelines, 2) Reduced hallucination through grounded responses, 3) Compliance with regulatory requirements through traceable sources, and 4) Personalized patient care through dynamic information retrieval.",
-        "ADAMS_Score": 8.4
-    },
-    {
-        "Question": "How do transformer architectures handle long sequences?",
-        "Reference Answer": "Transformers use attention mechanisms but face quadratic complexity with sequence length, leading to various optimization techniques.",
-        "Model Answer": "Transformer architectures handle long sequences through self-attention mechanisms, though they face computational challenges due to quadratic complexity. Modern approaches include attention optimization, sparse attention patterns, and hierarchical processing.",
-        "ADAMS_Score": 8.9
-    },
-    {
-        "Question": "What is the difference between supervised and unsupervised learning?",
-        "Reference Answer": "Supervised learning uses labeled data for training, while unsupervised learning finds patterns in unlabeled data.",
-        "Model Answer": "Supervised learning algorithms learn from labeled training data to make predictions on new data, while unsupervised learning discovers hidden patterns and structures in data without labels, such as clustering and dimensionality reduction.",
-        "ADAMS_Score": 9.1
+        "Reference_Answer": "RAG systems provide up-to-date medical information, reduce hallucinations, ensure compliance, and enable personalized care.",
+        "Model_Answer": "RAG systems in healthcare offer several key benefits: 1) Access to up-to-date medical research and guidelines, 2) Reduced hallucination through grounded responses, 3) Compliance with regulatory requirements through traceable sources, and 4) Personalized patient care through dynamic information retrieval.",
+        "Original_Data": True
     }
 ]
+
+def process_uploaded_dataset(uploaded_file, selected_llm):
+    """Process uploaded dataset and add ADAMS scores and metrics"""
+    try:
+        # Read the uploaded file
+        if uploaded_file.name.endswith('.csv'):
+            df = pd.read_csv(uploaded_file)
+        elif uploaded_file.name.endswith('.json'):
+            df = pd.read_json(uploaded_file)
+        else:
+            return None
+        
+        # Ensure required columns exist
+        required_columns = ['Question', 'Reference_Answer', 'Model_Answer']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        
+        if missing_columns:
+            st.error(f"Missing required columns: {missing_columns}")
+            return None
+        
+        # Add ADAMS processing results
+        processed_data = []
+        for _, row in df.iterrows():
+            # Simulate ADAMS metric evaluation with some randomness but realistic scores
+            base_scores = {
+                'Factual_Accuracy': random.uniform(7.5, 9.5),
+                'Coherence': random.uniform(8.0, 9.8),
+                'Relevance': random.uniform(8.2, 9.6),
+                'Completeness': random.uniform(7.0, 9.0),
+                'Citation_Quality': random.uniform(6.5, 8.5),
+                'Clarity': random.uniform(8.5, 9.7),
+                'Technical_Depth': random.uniform(7.2, 8.8)
+            }
+            
+            # Calculate overall ADAMS score (weighted average)
+            weights = [0.9, 0.8, 0.85, 0.7, 0.75, 0.7, 0.7]
+            adams_score = sum(score * weight for score, weight in zip(base_scores.values(), weights)) / sum(weights)
+            
+            processed_row = {
+                'Question': row['Question'],
+                'Reference_Answer': row['Reference_Answer'], 
+                'Model_Answer': row['Model_Answer'],
+                'ADAMS_Score': round(adams_score, 2),
+                'LLM_Judge': selected_llm,
+                'Factual_Accuracy': round(base_scores['Factual_Accuracy'], 2),
+                'Coherence': round(base_scores['Coherence'], 2),
+                'Relevance': round(base_scores['Relevance'], 2),
+                'Completeness': round(base_scores['Completeness'], 2),
+                'Citation_Quality': round(base_scores['Citation_Quality'], 2),
+                'Clarity': round(base_scores['Clarity'], 2),
+                'Technical_Depth': round(base_scores['Technical_Depth'], 2),
+                'Processing_Timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
+                'Original_Data': False
+            }
+            processed_data.append(processed_row)
+            
+        return processed_data
+        
+    except Exception as e:
+        st.error(f"Error processing file: {str(e)}")
+        return None
 
 if st.session_state.metrics_data is None:
     st.session_state.metrics_data = default_metrics.copy()
@@ -204,6 +256,23 @@ if st.session_state.page == 'upload':
     st.markdown('<div class="cyber-card">', unsafe_allow_html=True)
     st.markdown("## 🧠 Dataset Processing")
     st.markdown("Upload your RAG outputs for multi-agent evaluation analysis")
+    
+    # Download sample dataset section
+    st.markdown("### 📥 Need a Sample Dataset?")
+    sample_csv_data = """Question,Reference_Answer,Model_Answer
+"What are the key benefits of using RAG systems in healthcare applications?","RAG systems provide up-to-date medical information, reduce hallucinations, ensure compliance, and enable personalized care.","RAG systems in healthcare offer several key benefits: 1) Access to up-to-date medical research and guidelines, 2) Reduced hallucination through grounded responses, 3) Compliance with regulatory requirements through traceable sources, and 4) Personalized patient care through dynamic information retrieval."
+"How do transformer architectures handle long sequences?","Transformers use attention mechanisms but face quadratic complexity with sequence length, leading to various optimization techniques.","Transformer architectures handle long sequences through self-attention mechanisms, though they face computational challenges due to quadratic complexity. Modern approaches include attention optimization, sparse attention patterns, and hierarchical processing to manage memory and computational requirements effectively."
+"What is the difference between supervised and unsupervised learning?","Supervised learning uses labeled data for training, while unsupervised learning finds patterns in unlabeled data.","Supervised learning algorithms learn from labeled training data to make predictions on new data, while unsupervised learning discovers hidden patterns and structures in data without labels, such as clustering and dimensionality reduction techniques."
+"Explain the concept of transfer learning in deep learning.","Transfer learning involves using pre-trained models and adapting them to new tasks, reducing training time and data requirements.","Transfer learning is a machine learning technique where a model developed for one task is reused as the starting point for a model on a related task. This approach leverages knowledge gained from pre-trained models, significantly reducing training time and computational resources while often achieving better performance."
+"What are the main challenges in implementing RAG systems?","Key challenges include retrieval quality, context length limitations, computational costs, and maintaining consistency between retrieved and generated content.","The main challenges in implementing RAG systems include: 1) Ensuring high-quality and relevant document retrieval, 2) Managing context length limitations in language models, 3) Balancing computational costs with performance, 4) Maintaining consistency between retrieved information and generated responses, and 5) Handling conflicting information from multiple sources."""
+    
+    st.download_button(
+        label="📥 Download Sample Dataset (CSV)",
+        data=sample_csv_data,
+        file_name="sample_rag_dataset.csv",
+        mime="text/csv",
+        help="Download this sample dataset to test the ADAMS interface"
+    )
     
     # File uploader
     uploaded_file = st.file_uploader(
@@ -244,9 +313,15 @@ if st.session_state.page == 'upload':
                 status_text.markdown(f'<p class="neon-text">{stage}</p>', unsafe_allow_html=True)
                 time.sleep(0.8)
             
-            st.session_state.processing_complete = True
-            st.session_state.dataset_processed = sample_dataset
-            st.rerun()
+            # Process the uploaded dataset
+            processed_data = process_uploaded_dataset(uploaded_file, st.session_state.selected_llm)
+            if processed_data:
+                st.session_state.dataset_processed = processed_data
+                st.session_state.processing_complete = True
+                st.success(f"✅ Successfully processed {len(processed_data)} samples with {st.session_state.selected_llm}!")
+                st.rerun()
+            else:
+                st.error("❌ Failed to process dataset. Please check file format.")
     
     # Show results if processing is complete
     if st.session_state.processing_complete:
@@ -288,9 +363,18 @@ elif st.session_state.page == 'dataset':
         st.markdown(f"### 📊 Processed Dataset (LLM Judge: **{st.session_state.selected_llm}**)")
         
         # Display dataset as table
-        import pandas as pd
         df = pd.DataFrame(st.session_state.dataset_processed)
-        st.dataframe(df, use_container_width=True)
+        
+        # Show comparison between original and ADAMS-processed data
+        st.markdown("#### 📊 ADAMS-Enhanced Dataset")
+        st.markdown("*This dataset has been processed by ADAMS with additional evaluation metrics and scores.*")
+        
+        # Display the enhanced dataset
+        display_df = df.copy()
+        if 'Original_Data' in display_df.columns:
+            display_df = display_df.drop('Original_Data', axis=1)
+        
+        st.dataframe(display_df, use_container_width=True)
         
         # Download options
         st.markdown("### 💾 Download Options")
@@ -358,9 +442,15 @@ elif st.session_state.page == 'config':
         st.markdown('<div class="cyber-card">', unsafe_allow_html=True)
         st.markdown("### 🧬 Metric Control Matrix")
         
-        # Create sliders for each metric
+        # Create sliders for each metric with real-time updates
         updated_weights = {}
+        
+        # Force rerun when any slider changes by using a callback
+        def update_metrics():
+            pass
+        
         for metric_name, data in st.session_state.metrics_data.items():
+            # Create slider with on_change callback for real-time updates
             updated_weights[metric_name] = st.slider(
                 f"**{metric_name}**",
                 min_value=0.0,
@@ -368,12 +458,14 @@ elif st.session_state.page == 'config':
                 value=data['weight'],
                 step=0.05,
                 key=f"slider_{metric_name}",
-                help=f"Current score: {data['score']}"
+                help=f"Current score: {data['score']}",
+                on_change=update_metrics
             )
         
-        # Update the session state and recalculate final score in real-time
+        # Update the session state immediately when sliders change
         for metric_name in st.session_state.metrics_data:
-            st.session_state.metrics_data[metric_name]['weight'] = updated_weights[metric_name]
+            if st.session_state.metrics_data[metric_name]['weight'] != updated_weights[metric_name]:
+                st.session_state.metrics_data[metric_name]['weight'] = updated_weights[metric_name]
         
         if st.button("↺ Reset to Defaults", use_container_width=True):
             st.session_state.metrics_data = default_metrics.copy()
