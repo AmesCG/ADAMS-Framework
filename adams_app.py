@@ -319,39 +319,25 @@ if st.session_state.page == 'upload':
                 st.session_state.dataset_processed = processed_data
                 st.session_state.processing_complete = True
                 st.success(f"✅ Successfully processed {len(processed_data)} samples with {st.session_state.selected_llm}!")
+                time.sleep(1)  # Brief pause to show success message
+                st.session_state.page = 'dataset'  # Automatically go to dataset review page
                 st.rerun()
             else:
                 st.error("❌ Failed to process dataset. Please check file format.")
     
-    # Show results if processing is complete
-    if st.session_state.processing_complete:
-        st.markdown("### ⚡ Multi-Agent Evaluation Results")
-        
-        # Create metrics grid using columns
-        metrics_list = list(st.session_state.metrics_data.items())
-        
-        # Display metrics in rows of 3
-        for i in range(0, len(metrics_list), 3):
-            cols = st.columns(3)
-            for j, col in enumerate(cols):
-                if i + j < len(metrics_list):
-                    metric_name, data = metrics_list[i + j]
-                    with col:
-                        st.markdown(f"""
-                        <div class="metric-display">
-                            <div class="metric-value">{data['score']}</div>
-                            <div class="metric-name">{metric_name}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-        
-        st.markdown("</div>", unsafe_allow_html=True)
-        
-        if st.button("📋 View Processed Dataset", use_container_width=True, type="primary"):
-            st.session_state.page = 'dataset'
-            st.rerun()
+    # Remove the results display from upload page - it should only show on dataset review page
+    # Results now only appear on the Dataset Review page after processing
     
     if not st.session_state.processing_complete:
         st.markdown("</div>", unsafe_allow_html=True)
+    else:
+        # If processing is complete, show a message directing user to dataset review
+        st.markdown("</div>", unsafe_allow_html=True)
+        st.info("✅ Processing complete! Check the **Dataset Review** page to see your results.")
+        
+        if st.button("📋 Go to Dataset Review", use_container_width=True, type="primary"):
+            st.session_state.page = 'dataset'
+            st.rerun()
 
 # Page 2: Dataset Review
 elif st.session_state.page == 'dataset':
