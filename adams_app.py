@@ -291,7 +291,16 @@ if st.session_state.page == 'upload':
     )
     
     if uploaded_file is not None:
-        st.success(f"✅ File uploaded successfully! Selected LLM Judge: **{st.session_state.selected_llm}**")
+        # Show uploaded file info with delete option
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            st.success(f"✅ File uploaded: **{uploaded_file.name}** | Selected LLM Judge: **{st.session_state.selected_llm}**")
+        with col2:
+            if st.button("🗑️ Remove", help="Remove uploaded file", key="delete_upload"):
+                uploaded_file = None
+                st.session_state.processing_complete = False
+                st.session_state.dataset_processed = None
+                st.rerun()
         
         # Simulate processing
         if st.button("🚀 Launch ADAMS Analysis", use_container_width=True, type="primary"):
@@ -345,8 +354,19 @@ elif st.session_state.page == 'dataset':
     st.markdown("Review the processed dataset with ADAMS scores and download results")
     
     if st.session_state.dataset_processed:
-        st.markdown('<div class="cyber-card">', unsafe_allow_html=True)
-        st.markdown(f"### 📊 Processed Dataset (LLM Judge: **{st.session_state.selected_llm}**)")
+        # Add clear dataset option
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            st.markdown('<div class="cyber-card">', unsafe_allow_html=True)
+            st.markdown(f"### 📊 Processed Dataset (LLM Judge: **{st.session_state.selected_llm}**)")
+        with col2:
+            st.markdown('<div style="padding-top: 2rem;">', unsafe_allow_html=True)
+            if st.button("🗑️ Clear Dataset", help="Clear processed dataset and start over", type="secondary"):
+                st.session_state.dataset_processed = None
+                st.session_state.processing_complete = False
+                st.session_state.page = 'upload'
+                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
         
         # Display dataset as table
         df = pd.DataFrame(st.session_state.dataset_processed)
@@ -513,16 +533,24 @@ elif st.session_state.page == 'config':
     with col2:
         st.markdown('<div class="cyber-card">', unsafe_allow_html=True)
         
-        # Calculate final score in real-time
-        weighted_sum = sum(data['score'] * data['weight'] for data in st.session_state.metrics_data.values())
-        total_weight = sum(data['weight'] for data in st.session_state.metrics_data.values())
-        final_score = weighted_sum / total_weight if total_weight > 0 else 0
+        # Calculate final score in real-time (this will update automatically as sliders change)
+        total_weighted_score = 0
+        total_weights = 0
         
-        # Display final score (updates automatically as sliders move)
+        for metric_name, data in st.session_state.metrics_data.items():
+            total_weighted_score += data['score'] * data['weight']
+            total_weights += data['weight']
+        
+        final_score = total_weighted_score / total_weights if total_weights > 0 else 0
+        
+        # Display final score with real-time updates
         st.markdown(f"""
         <div class="score-display">
             <h3 style="color: #b8bcc8; margin-bottom: 1rem;">Final ADAMS Score</h3>
-            <div class="score-value">{final_score:.1f}</div>
+            <div class="score-value">{final_score:.2f}</div>
+            <div style="font-size: 0.9rem; color: #b8bcc8; margin-top: 0.5rem;">
+                Based on {total_weights:.2f} total weight
+            </div>
         </div>
         """, unsafe_allow_html=True)
         
@@ -536,27 +564,41 @@ elif st.session_state.page == 'config':
             **AI Response:** RAG systems in healthcare offer several key benefits: 1) Access to up-to-date medical research and guidelines, 2) Reduced hallucination through grounded responses, 3) Compliance with regulatory requirements through traceable sources, and 4) Personalized patient care through dynamic information retrieval.
             """)
         
-        # Impact analysis (updates based on current weights)
-        top_metrics = sorted(st.session_state.metrics_data.items(), key=lambda x: x[1]['weight'], reverse=True)[:3]
-        top_names = [metric[0] for metric in top_metrics]
-        avg_weight = sum(metric[1]['weight'] for metric in top_metrics) / 3
+        # Impact analysis (updates automatically based on current weights)
+        sorted_metrics = sorted(st.session_state.metrics_data.items(), key=lambda x: x[1]['weight'], reverse=True)
+        top_3_metrics = sorted_metrics[:3]
+        top_names = [metric[0] for metric in top_3_metrics]
+        avg_top_weight = sum(metric[1]['weight'] for metric in top_3_metrics) / 3
         
-        impact_text = f"**🔥 Impact Analysis:**\n\nCurrent emphasis: {', '.join(top_names)}. "
-        if avg_weight > 0.8:
-            impact_text += "High-confidence configuration detected. System optimized for precision evaluation."
-        elif avg_weight > 0.6:
-            impact_text += "Balanced configuration active. Moderate weighting across evaluation dimensions."
+        impact_text = f"**🔥 Real-time Impact Analysis:**\n\n"
+        impact_text += f"**Current emphasis:** {', '.join(top_names)}\n\n"
+        
+        if avg_top_weight > 0.8:
+            impact_text += "**Status:** High-confidence configuration detected. System optimized for precision evaluation."
+        elif avg_top_weight > 0.6:
+            impact_text += "**Status:** Balanced configuration active. Moderate weighting across evaluation dimensions."
         else:
-            impact_text += "Low-weight configuration. Consider increasing key metric priorities for better accuracy."
+            impact_text += "**Status:** Low-weight configuration. Consider increasing key metric priorities for better accuracy."
+        
+        impact_text += f"\n\n**Total Active Weight:** {total_weights:.2f}"
         
         st.info(impact_text)
         
-        # Current session info
+        # Current session info with real-time updates
         if st.session_state.reviewer_comments:
             st.markdown("#### 📝 Current Session")
             st.markdown(f"**Mode:** {st.session_state.reviewer_comments.get('mode', 'Not set')}")
             if st.session_state.reviewer_comments.get('timestamp'):
                 st.markdown(f"**Last saved:** {st.session_state.reviewer_comments['timestamp']}")
+        
+        # Live metrics summary
+        st.markdown("#### 📊 Live Metrics")
+        highest_weight_metric = max(st.session_state.metrics_data.items(), key=lambda x: x[1]['weight'])
+        lowest_weight_metric = min(st.session_state.metrics_data.items(), key=lambda x: x[1]['weight'])
+        
+        st.markdown(f"**Highest priority:** {highest_weight_metric[0]} ({highest_weight_metric[1]['weight']:.2f})")
+        st.markdown(f"**Lowest priority:** {lowest_weight_metric[0]} ({lowest_weight_metric[1]['weight']:.2f})")
+        st.markdown(f"**Current final score:** {final_score:.2f}")
         
         st.markdown("</div>", unsafe_allow_html=True)
     
@@ -614,10 +656,24 @@ with st.sidebar:
     st.markdown(f"**LLM Judge:** {st.session_state.selected_llm}")
     
     if st.session_state.processing_complete:
+        # Recalculate final score for sidebar display
         weighted_sum = sum(data['score'] * data['weight'] for data in st.session_state.metrics_data.values())
         total_weight = sum(data['weight'] for data in st.session_state.metrics_data.values())
-        final_score = weighted_sum / total_weight if total_weight > 0 else 0
-        st.markdown(f"**Current Score:** {final_score:.1f}")
+        current_final_score = weighted_sum / total_weight if total_weight > 0 else 0
+        st.markdown(f"**Current Score:** {current_final_score:.2f}")
+    
+    # Show weight distribution
+    if st.session_state.metrics_data:
+        st.markdown("---")
+        st.markdown("### ⚖️ Weight Summary")
+        total_weight = sum(data['weight'] for data in st.session_state.metrics_data.values())
+        st.markdown(f"**Total Weight:** {total_weight:.2f}")
+        
+        # Show top 3 metrics
+        top_metrics = sorted(st.session_state.metrics_data.items(), key=lambda x: x[1]['weight'], reverse=True)[:3]
+        st.markdown("**Top 3 Priorities:**")
+        for i, (name, data) in enumerate(top_metrics, 1):
+            st.markdown(f"{i}. {name}: {data['weight']:.2f}")
     
     st.markdown("---")
     st.markdown("### ⚡ Quick Actions")
