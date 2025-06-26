@@ -141,6 +141,10 @@ if 'selected_llm' not in st.session_state:
     st.session_state.selected_llm = 'Qwen'
 if 'reviewer_comments' not in st.session_state:
     st.session_state.reviewer_comments = {}
+if 'comparison_datasets' not in st.session_state:
+    st.session_state.comparison_datasets = {'dataset_a': None, 'dataset_b': None}
+if 'comparison_names' not in st.session_state:
+    st.session_state.comparison_names = {'dataset_a': 'Dataset A', 'dataset_b': 'Dataset B'}
 
 # Sample metrics data
 default_metrics = {
@@ -230,7 +234,7 @@ st.markdown('<h1 class="main-title">ADAMS</h1>', unsafe_allow_html=True)
 st.markdown('<p style="text-align: center; font-size: 1.2rem; color: #b8bcc8; margin-bottom: 2rem;">Adaptive Domain-Aware Metric Selection</p>', unsafe_allow_html=True)
 
 # Navigation
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 with col1:
     if st.button("📊 Dataset Upload", use_container_width=True, type="primary"):
         st.session_state.page = 'upload'
@@ -240,6 +244,9 @@ with col2:
 with col3:
     if st.button("🎛️ Configuration", use_container_width=True, type="primary"):
         st.session_state.page = 'config'
+with col4:
+    if st.button("⚖️ Compare", use_container_width=True, type="primary"):
+        st.session_state.page = 'compare'
 
 # Page 1: Upload
 if st.session_state.page == 'upload':
@@ -621,6 +628,348 @@ elif st.session_state.page == 'config':
                 mime="application/json"
             )
 
+# Page 4: Dataset Comparison
+elif st.session_state.page == 'compare':
+    st.markdown("## ⚖️ Dataset Comparison Analysis")
+    st.markdown("Compare two ADAMS-processed datasets with advanced statistical analysis")
+    
+    # Upload section for comparison datasets
+    st.markdown('<div class="cyber-card">', unsafe_allow_html=True)
+    st.markdown("### 📂 Upload Datasets for Comparison")
+    st.markdown("Upload two ADAMS-processed datasets (CSV/JSON format) to perform comparative analysis")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("#### 🔵 Dataset A")
+        dataset_a_name = st.text_input("Dataset A Name:", value=st.session_state.comparison_names['dataset_a'], key="name_a")
+        uploaded_file_a = st.file_uploader(
+            "Upload first dataset for comparison",
+            type=['csv', 'json'],
+            key="file_a",
+            help="Must be ADAMS-processed dataset with ADAMS_Score column"
+        )
+        
+        if uploaded_file_a:
+            try:
+                if uploaded_file_a.name.endswith('.csv'):
+                    df_a = pd.read_csv(uploaded_file_a)
+                else:
+                    df_a = pd.read_json(uploaded_file_a)
+                
+                # Validate ADAMS format
+                required_cols = ['Question', 'Model_Answer', 'ADAMS_Score']
+                if all(col in df_a.columns for col in required_cols):
+                    st.session_state.comparison_datasets['dataset_a'] = df_a
+                    st.session_state.comparison_names['dataset_a'] = dataset_a_name
+                    st.success(f"✅ {dataset_a_name} loaded: {len(df_a)} samples")
+                else:
+                    st.error("❌ Invalid format. Need ADAMS-processed dataset with required columns.")
+            except Exception as e:
+                st.error(f"❌ Error loading dataset: {str(e)}")
+    
+    with col2:
+        st.markdown("#### 🔴 Dataset B")
+        dataset_b_name = st.text_input("Dataset B Name:", value=st.session_state.comparison_names['dataset_b'], key="name_b")
+        uploaded_file_b = st.file_uploader(
+            "Upload second dataset for comparison",
+            type=['csv', 'json'],
+            key="file_b",
+            help="Must be ADAMS-processed dataset with ADAMS_Score column"
+        )
+        
+        if uploaded_file_b:
+            try:
+                if uploaded_file_b.name.endswith('.csv'):
+                    df_b = pd.read_csv(uploaded_file_b)
+                else:
+                    df_b = pd.read_json(uploaded_file_b)
+                
+                # Validate ADAMS format
+                required_cols = ['Question', 'Model_Answer', 'ADAMS_Score']
+                if all(col in df_b.columns for col in required_cols):
+                    st.session_state.comparison_datasets['dataset_b'] = df_b
+                    st.session_state.comparison_names['dataset_b'] = dataset_b_name
+                    st.success(f"✅ {dataset_b_name} loaded: {len(df_b)} samples")
+                else:
+                    st.error("❌ Invalid format. Need ADAMS-processed dataset with required columns.")
+            except Exception as e:
+                st.error(f"❌ Error loading dataset: {str(e)}")
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Show comparison analysis if both datasets are loaded
+    if (st.session_state.comparison_datasets['dataset_a'] is not None and 
+        st.session_state.comparison_datasets['dataset_b'] is not None):
+        
+        df_a = st.session_state.comparison_datasets['dataset_a']
+        df_b = st.session_state.comparison_datasets['dataset_b']
+        name_a = st.session_state.comparison_names['dataset_a']
+        name_b = st.session_state.comparison_names['dataset_b']
+        
+        # Statistical Overview
+        st.markdown('<div class="cyber-card">', unsafe_allow_html=True)
+        st.markdown("### 📊 Statistical Overview")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.markdown(f"""
+            <div class="metric-display">
+                <div class="metric-value">{len(df_a)}</div>
+                <div class="metric-name">{name_a} Samples</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown(f"""
+            <div class="metric-display">
+                <div class="metric-value">{len(df_b)}</div>
+                <div class="metric-name">{name_b} Samples</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with col3:
+            avg_diff = df_a['ADAMS_Score'].mean() - df_b['ADAMS_Score'].mean()
+            color = "#00f5ff" if avg_diff >= 0 else "#ff006e"
+            st.markdown(f"""
+            <div class="metric-display">
+                <div class="metric-value" style="color: {color};">{avg_diff:+.2f}</div>
+                <div class="metric-name">Average Difference</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with col4:
+            # Calculate statistical significance (simplified)
+            from scipy import stats
+            try:
+                t_stat, p_value = stats.ttest_ind(df_a['ADAMS_Score'], df_b['ADAMS_Score'])
+                significance = "Significant" if p_value < 0.05 else "Not Significant"
+                sig_color = "#00f5ff" if p_value < 0.05 else "#b8bcc8"
+            except:
+                significance = "N/A"
+                sig_color = "#b8bcc8"
+            
+            st.markdown(f"""
+            <div class="metric-display">
+                <div class="metric-value" style="color: {sig_color}; font-size: 1.5rem;">{significance}</div>
+                <div class="metric-name">Statistical Difference</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        # Detailed Score Comparison
+        st.markdown('<div class="cyber-card">', unsafe_allow_html=True)
+        st.markdown("### 🎯 Score Analysis")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown(f"#### 🔵 {name_a} Statistics")
+            st.markdown(f"**Mean Score:** {df_a['ADAMS_Score'].mean():.2f}")
+            st.markdown(f"**Median Score:** {df_a['ADAMS_Score'].median():.2f}")
+            st.markdown(f"**Std Deviation:** {df_a['ADAMS_Score'].std():.2f}")
+            st.markdown(f"**Min Score:** {df_a['ADAMS_Score'].min():.2f}")
+            st.markdown(f"**Max Score:** {df_a['ADAMS_Score'].max():.2f}")
+            
+            # Score distribution
+            score_dist_a = df_a['ADAMS_Score'].value_counts(bins=5).sort_index()
+            st.markdown("**Score Distribution:**")
+            for range_label, count in score_dist_a.items():
+                st.markdown(f"• {range_label}: {count} samples")
+        
+        with col2:
+            st.markdown(f"#### 🔴 {name_b} Statistics")
+            st.markdown(f"**Mean Score:** {df_b['ADAMS_Score'].mean():.2f}")
+            st.markdown(f"**Median Score:** {df_b['ADAMS_Score'].median():.2f}")
+            st.markdown(f"**Std Deviation:** {df_b['ADAMS_Score'].std():.2f}")
+            st.markdown(f"**Min Score:** {df_b['ADAMS_Score'].min():.2f}")
+            st.markdown(f"**Max Score:** {df_b['ADAMS_Score'].max():.2f}")
+            
+            # Score distribution
+            score_dist_b = df_b['ADAMS_Score'].value_counts(bins=5).sort_index()
+            st.markdown("**Score Distribution:**")
+            for range_label, count in score_dist_b.items():
+                st.markdown(f"• {range_label}: {count} samples")
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        # Metric-by-Metric Comparison (if available)
+        st.markdown('<div class="cyber-card">', unsafe_allow_html=True)
+        st.markdown("### 🧬 Metric-by-Metric Analysis")
+        
+        # Find common metric columns
+        metric_cols = [col for col in df_a.columns if col in df_b.columns and col not in ['Question', 'Reference_Answer', 'Model_Answer', 'LLM_Judge', 'Processing_Timestamp', 'Original_Data']]
+        
+        if len(metric_cols) > 1:
+            comparison_data = []
+            for metric in metric_cols:
+                if metric in df_a.columns and metric in df_b.columns:
+                    # Skip non-numeric columns
+                    try:
+                        mean_a = df_a[metric].mean()
+                        mean_b = df_b[metric].mean()
+                        difference = mean_a - mean_b
+                        
+                        comparison_data.append({
+                            'Metric': metric,
+                            f'{name_a} Avg': round(mean_a, 2),
+                            f'{name_b} Avg': round(mean_b, 2),
+                            'Difference': round(difference, 2),
+                            'Winner': name_a if difference > 0 else name_b if difference < 0 else 'Tie'
+                        })
+                    except:
+                        continue
+            
+            if comparison_data:
+                comparison_df = pd.DataFrame(comparison_data)
+                
+                # Style the dataframe for better visualization
+                def highlight_winner(row):
+                    if row['Winner'] == name_a:
+                        return ['background-color: rgba(0, 245, 255, 0.1)'] * len(row)
+                    elif row['Winner'] == name_b:
+                        return ['background-color: rgba(255, 0, 110, 0.1)'] * len(row)
+                    else:
+                        return ['background-color: rgba(255, 255, 255, 0.05)'] * len(row)
+                
+                st.dataframe(
+                    comparison_df.style.apply(highlight_winner, axis=1),
+                    use_container_width=True
+                )
+                
+                # Winner summary
+                a_wins = sum(1 for row in comparison_data if row['Winner'] == name_a)
+                b_wins = sum(1 for row in comparison_data if row['Winner'] == name_b)
+                ties = sum(1 for row in comparison_data if row['Winner'] == 'Tie')
+                
+                st.markdown(f"""
+                **🏆 Metric Wins Summary:**
+                • {name_a}: {a_wins} metrics
+                • {name_b}: {b_wins} metrics  
+                • Ties: {ties} metrics
+                """)
+            else:
+                st.info("No comparable numeric metrics found between datasets.")
+        else:
+            st.info("Limited metric data available for detailed comparison.")
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        # Sample Comparison
+        st.markdown('<div class="cyber-card">', unsafe_allow_html=True)
+        st.markdown("### 🔍 Sample-by-Sample Analysis")
+        
+        # Find common questions if available
+        if 'Question' in df_a.columns and 'Question' in df_b.columns:
+            common_questions = set(df_a['Question']).intersection(set(df_b['Question']))
+            
+            if common_questions:
+                st.markdown(f"**Found {len(common_questions)} common questions for direct comparison**")
+                
+                # Show comparison for common questions
+                common_comparison = []
+                for question in list(common_questions)[:5]:  # Show first 5
+                    score_a = df_a[df_a['Question'] == question]['ADAMS_Score'].iloc[0]
+                    score_b = df_b[df_b['Question'] == question]['ADAMS_Score'].iloc[0]
+                    
+                    common_comparison.append({
+                        'Question': question[:100] + "..." if len(question) > 100 else question,
+                        f'{name_a} Score': score_a,
+                        f'{name_b} Score': score_b,
+                        'Difference': round(score_a - score_b, 2)
+                    })
+                
+                if common_comparison:
+                    st.dataframe(pd.DataFrame(common_comparison), use_container_width=True)
+            else:
+                st.info("No common questions found between datasets.")
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        # Export Comparison Report
+        st.markdown('<div class="cyber-card">', unsafe_allow_html=True)
+        st.markdown("### 💾 Export Comparison Report")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("📊 Generate Detailed Report", use_container_width=True, type="primary"):
+                # Create comprehensive comparison report
+                report_data = {
+                    "comparison_metadata": {
+                        "dataset_a_name": name_a,
+                        "dataset_b_name": name_b,
+                        "dataset_a_samples": len(df_a),
+                        "dataset_b_samples": len(df_b),
+                        "comparison_timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+                    },
+                    "statistical_summary": {
+                        "dataset_a_stats": {
+                            "mean": df_a['ADAMS_Score'].mean(),
+                            "median": df_a['ADAMS_Score'].median(),
+                            "std": df_a['ADAMS_Score'].std(),
+                            "min": df_a['ADAMS_Score'].min(),
+                            "max": df_a['ADAMS_Score'].max()
+                        },
+                        "dataset_b_stats": {
+                            "mean": df_b['ADAMS_Score'].mean(),
+                            "median": df_b['ADAMS_Score'].median(),
+                            "std": df_b['ADAMS_Score'].std(),
+                            "min": df_b['ADAMS_Score'].min(),
+                            "max": df_b['ADAMS_Score'].max()
+                        },
+                        "difference_analysis": {
+                            "mean_difference": df_a['ADAMS_Score'].mean() - df_b['ADAMS_Score'].mean(),
+                            "median_difference": df_a['ADAMS_Score'].median() - df_b['ADAMS_Score'].median()
+                        }
+                    },
+                    "metric_comparison": comparison_data if 'comparison_data' in locals() else [],
+                    "common_questions_analysis": common_comparison if 'common_comparison' in locals() else []
+                }
+                
+                st.download_button(
+                    label="Download Comparison Report",
+                    data=json.dumps(report_data, indent=2),
+                    file_name=f"adams_comparison_{name_a.lower().replace(' ', '_')}_vs_{name_b.lower().replace(' ', '_')}_{time.strftime('%Y%m%d_%H%M%S')}.json",
+                    mime="application/json"
+                )
+        
+        with col2:
+            if st.button("🔄 Clear Comparison", use_container_width=True):
+                st.session_state.comparison_datasets = {'dataset_a': None, 'dataset_b': None}
+                st.session_state.comparison_names = {'dataset_a': 'Dataset A', 'dataset_b': 'Dataset B'}
+                st.rerun()
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+    else:
+        # Show instruction when no datasets loaded
+        st.markdown('<div class="cyber-card">', unsafe_allow_html=True)
+        st.markdown("### 🎯 How to Use Dataset Comparison")
+        st.markdown("""
+        1. **Upload Two Datasets**: Both must be ADAMS-processed datasets with required columns
+        2. **Statistical Analysis**: View comprehensive statistical comparison
+        3. **Metric Breakdown**: Compare individual evaluation metrics
+        4. **Sample Analysis**: Examine common questions between datasets
+        5. **Export Results**: Download detailed comparison reports
+        
+        **Required Format**: Your datasets must contain at minimum:
+        - `Question`: The input query
+        - `Model_Answer`: The AI response  
+        - `ADAMS_Score`: The computed ADAMS score
+        """)
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        # Quick access to process current dataset
+        if st.session_state.dataset_processed:
+            st.info("💡 **Tip**: Your current processed dataset is available. Upload another dataset to compare against it.")
+            if st.button("📤 Use Current Dataset as Dataset A", use_container_width=True):
+                st.session_state.comparison_datasets['dataset_a'] = pd.DataFrame(st.session_state.dataset_processed)
+                st.session_state.comparison_names['dataset_a'] = f"Current Dataset ({st.session_state.selected_llm})"
+                st.rerun()
+
 # Sidebar with additional info
 with st.sidebar:
     st.markdown("### 🧠 ADAMS Interface")
@@ -640,6 +989,19 @@ with st.sidebar:
         total_weight = sum(data['weight'] for data in st.session_state.metrics_data.values())
         current_final_score = weighted_sum / total_weight if total_weight > 0 else 0
         st.markdown(f"**Current Score:** {current_final_score:.2f}")
+    
+    # Show comparison status
+    if st.session_state.page == 'compare':
+        st.markdown("---")
+        st.markdown("### ⚖️ Comparison Status")
+        dataset_a_status = "✅ Loaded" if st.session_state.comparison_datasets['dataset_a'] is not None else "❌ Not loaded"
+        dataset_b_status = "✅ Loaded" if st.session_state.comparison_datasets['dataset_b'] is not None else "❌ Not loaded"
+        st.markdown(f"**Dataset A:** {dataset_a_status}")
+        st.markdown(f"**Dataset B:** {dataset_b_status}")
+        
+        if (st.session_state.comparison_datasets['dataset_a'] is not None and 
+            st.session_state.comparison_datasets['dataset_b'] is not None):
+            st.markdown("🎯 **Ready for Analysis**")
     
     # Show weight distribution
     if st.session_state.metrics_data:
