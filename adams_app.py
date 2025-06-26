@@ -161,16 +161,6 @@ default_metrics = {
     'Bias Detection': {'score': 8.2, 'weight': 0.7}
 }
 
-# Sample dataset for demonstration - this gets replaced when user uploads real data
-sample_dataset = [
-    {
-        "Question": "What are the key benefits of using RAG systems in healthcare?",
-        "Reference_Answer": "RAG systems provide up-to-date medical information, reduce hallucinations, ensure compliance, and enable personalized care.",
-        "Model_Answer": "RAG systems in healthcare offer several key benefits: 1) Access to up-to-date medical research and guidelines, 2) Reduced hallucination through grounded responses, 3) Compliance with regulatory requirements through traceable sources, and 4) Personalized patient care through dynamic information retrieval.",
-        "Original_Data": True
-    }
-]
-
 def process_uploaded_dataset(uploaded_file, selected_llm):
     """Process uploaded dataset and add ADAMS scores and metrics"""
     try:
@@ -277,8 +267,8 @@ if st.session_state.page == 'upload':
     # File uploader
     uploaded_file = st.file_uploader(
         "Drop your data into the evaluation system",
-        type=['csv', 'json', 'xlsx'],
-        help="Supports CSV, JSON, XLSX formats • Max 200MB"
+        type=['csv', 'json'],
+        help="Supports CSV, JSON formats • Max 200MB"
     )
     
     # LLM Judge Selection
@@ -328,19 +318,15 @@ if st.session_state.page == 'upload':
                 st.session_state.dataset_processed = processed_data
                 st.session_state.processing_complete = True
                 st.success(f"✅ Successfully processed {len(processed_data)} samples with {st.session_state.selected_llm}!")
-                time.sleep(1)  # Brief pause to show success message
-                st.session_state.page = 'dataset'  # Automatically go to dataset review page
+                time.sleep(1)
+                st.session_state.page = 'dataset'
                 st.rerun()
             else:
                 st.error("❌ Failed to process dataset. Please check file format.")
     
-    # Remove the results display from upload page - it should only show on dataset review page
-    # Results now only appear on the Dataset Review page after processing
-    
     if not st.session_state.processing_complete:
         st.markdown("</div>", unsafe_allow_html=True)
     else:
-        # If processing is complete, show a message directing user to dataset review
         st.markdown("</div>", unsafe_allow_html=True)
         st.info("✅ Processing complete! Check the **Dataset Review** page to see your results.")
         
@@ -451,12 +437,7 @@ elif st.session_state.page == 'config':
         # Create sliders for each metric with real-time updates
         updated_weights = {}
         
-        # Force rerun when any slider changes by using a callback
-        def update_metrics():
-            pass
-        
         for metric_name, data in st.session_state.metrics_data.items():
-            # Create slider with on_change callback for real-time updates
             updated_weights[metric_name] = st.slider(
                 f"**{metric_name}**",
                 min_value=0.0,
@@ -464,14 +445,12 @@ elif st.session_state.page == 'config':
                 value=data['weight'],
                 step=0.05,
                 key=f"slider_{metric_name}",
-                help=f"Current score: {data['score']}",
-                on_change=update_metrics
+                help=f"Current score: {data['score']}"
             )
         
         # Update the session state immediately when sliders change
         for metric_name in st.session_state.metrics_data:
-            if st.session_state.metrics_data[metric_name]['weight'] != updated_weights[metric_name]:
-                st.session_state.metrics_data[metric_name]['weight'] = updated_weights[metric_name]
+            st.session_state.metrics_data[metric_name]['weight'] = updated_weights[metric_name]
         
         if st.button("↺ Reset to Defaults", use_container_width=True):
             st.session_state.metrics_data = default_metrics.copy()
@@ -533,7 +512,7 @@ elif st.session_state.page == 'config':
     with col2:
         st.markdown('<div class="cyber-card">', unsafe_allow_html=True)
         
-        # Calculate final score in real-time (this will update automatically as sliders change)
+        # Calculate final score in real-time
         total_weighted_score = 0
         total_weights = 0
         
@@ -564,7 +543,7 @@ elif st.session_state.page == 'config':
             **AI Response:** RAG systems in healthcare offer several key benefits: 1) Access to up-to-date medical research and guidelines, 2) Reduced hallucination through grounded responses, 3) Compliance with regulatory requirements through traceable sources, and 4) Personalized patient care through dynamic information retrieval.
             """)
         
-        # Impact analysis (updates automatically based on current weights)
+        # Impact analysis
         sorted_metrics = sorted(st.session_state.metrics_data.items(), key=lambda x: x[1]['weight'], reverse=True)
         top_3_metrics = sorted_metrics[:3]
         top_names = [metric[0] for metric in top_3_metrics]
@@ -584,7 +563,7 @@ elif st.session_state.page == 'config':
         
         st.info(impact_text)
         
-        # Current session info with real-time updates
+        # Current session info
         if st.session_state.reviewer_comments:
             st.markdown("#### 📝 Current Session")
             st.markdown(f"**Mode:** {st.session_state.reviewer_comments.get('mode', 'Not set')}")
